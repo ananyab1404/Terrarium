@@ -6,7 +6,7 @@ mod seccomp;
 #[cfg(target_os = "linux")]
 use anyhow::{Context, Result};
 #[cfg(target_os = "linux")]
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 #[cfg(target_os = "linux")]
 use nix::sched::{unshare, CloneFlags};
 #[cfg(target_os = "linux")]
@@ -49,6 +49,17 @@ struct Args {
     /// Disable private network namespace isolation.
     #[arg(long, default_value_t = false)]
     disable_netns: bool,
+
+    /// Seccomp mode for the host process before exec'ing Firecracker.
+    #[arg(long, value_enum, default_value_t = SeccompMode::Permissive)]
+    seccomp_mode: SeccompMode,
+}
+
+#[cfg(target_os = "linux")]
+#[derive(Clone, Debug, ValueEnum)]
+enum SeccompMode {
+    Permissive,
+    Allowlist,
 }
 
 #[cfg(target_os = "linux")]
@@ -64,7 +75,14 @@ fn main() -> Result<()> {
         unshare(CloneFlags::CLONE_NEWNET).context("failed to unshare network namespace")?;
     }
 
-    seccomp::apply_permissive_filter().context("failed to apply seccomp filter")?;
+    match args.seccomp_mode {
+        SeccompMode::Permissive => {
+            seccomp::apply_permissive_filter().context("failed to apply seccomp filter")?;
+        }
+        SeccompMode::Allowlist => {
+            seccomp::apply_allowlist_filter().context("failed to apply seccomp allowlist")?;
+        }
+    }
 
     setgid(Gid::from_raw(args.gid)).context("setgid failed")?;
     setuid(Uid::from_raw(args.uid)).context("setuid failed")?;
