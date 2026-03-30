@@ -13,6 +13,7 @@ defmodule Scheduler.JobStore.Adapter do
 
   @callback put_job_if_absent(job()) :: {:ok, job()} | {:error, :already_exists | reason()}
   @callback get_job(String.t()) :: {:ok, job()} | {:error, :not_found | reason()}
+  @callback list_jobs(keyword()) :: [job()]
   @callback mutate_job(String.t(), (job() -> {:ok, job()} | {:error, reason()})) ::
               {:ok, job()} | {:error, :not_found | reason()}
 

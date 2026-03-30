@@ -21,6 +21,9 @@ defmodule Scheduler.JobStore.ExAwsAdapter do
   def get_job(_job_id, _opts \\ []), do: {:error, :not_implemented}
 
   @impl true
+  def list_jobs(_opts \\ []), do: []
+
+  @impl true
   def mutate_job(_job_id, _mutator, _opts \\ []), do: {:error, :not_implemented}
 
   @impl true

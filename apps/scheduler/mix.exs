@@ -11,7 +11,7 @@ defmodule Scheduler.MixProject do
       lockfile: "../../mix.lock",
       elixir: "~> 1.16",
       start_permanent: Mix.env() == :prod,
-      deps: []
+      deps: deps()
     ]
   end
 
@@ -19,6 +19,12 @@ defmodule Scheduler.MixProject do
     [
       extra_applications: [:logger],
       mod: {Scheduler.Application, []}
+    ]
+  end
+
+  defp deps do
+    [
+      {:worker, in_umbrella: true}
     ]
   end
 end
