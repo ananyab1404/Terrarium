@@ -15,15 +15,34 @@ Based on the current workspace context (scheduler + DynamoDB state machine owner
 
 ## Next Action (Required)
 
-Run the setup script in **Administrator PowerShell** to finish Elixir install:
+Run these commands in **Administrator PowerShell**:
 
-- `scripts/person-2/setup-prerequisites.ps1`
+1. Install Erlang/OTP
 
-The script will:
+```powershell
+winget install --id Erlang.ErlangOTP --exact --source winget --accept-package-agreements --accept-source-agreements --disable-interactivity
+```
 
-1. Install missing tools
-2. Refresh PATH for the current shell
-3. Verify `erl`, `elixir`, `mix`, and `aws`
+2. Install AWS CLI v2
+
+```powershell
+winget install --id Amazon.AWSCLI --exact --source winget --accept-package-agreements --accept-source-agreements --disable-interactivity
+```
+
+3. Install Elixir (skip Erlang dependency because Erlang is already installed)
+
+```powershell
+choco install elixir -y --no-progress --ignore-dependencies
+```
+
+4. Verify installs
+
+```powershell
+erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell
+elixir --version
+mix --version
+aws --version
+```
 
 ## AWS Setup Reminder
 
