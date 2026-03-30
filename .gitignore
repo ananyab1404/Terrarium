@@ -1,0 +1,11 @@
+_build/
+deps/
+.cover/
+.elixir_ls/
+*.ez
+
+# Rust
+rust/jailer/target/
+
+# Local env
+.env
