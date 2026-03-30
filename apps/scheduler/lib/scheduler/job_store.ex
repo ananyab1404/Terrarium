@@ -169,6 +169,38 @@ defmodule Scheduler.JobStore do
     end, opts)
   end
 
+  @spec list_expired_running_jobs(keyword()) :: [map()]
+  def list_expired_running_jobs(opts \\ []) do
+    adapter = Keyword.get(opts, :adapter, Scheduler.JobStore.InMemoryAdapter)
+    now = now_ms()
+
+    adapter.list_jobs(opts)
+    |> Enum.filter(fn job ->
+      job.state == "RUNNING" and is_integer(Map.get(job, :lease_expires_at)) and job.lease_expires_at < now
+    end)
+  end
+
+  @spec force_terminal_deadletter(job_id(), map(), keyword()) ::
+          {:ok, map()} | {:error, :invalid_state | :not_found | term()}
+  def force_terminal_deadletter(job_id, failure, opts \\ []) do
+    adapter = Keyword.get(opts, :adapter, Scheduler.JobStore.InMemoryAdapter)
+    now = now_ms()
+
+    adapter.mutate_job(job_id, fn job ->
+      case job.state do
+        "TERMINAL" ->
+          {:ok, job}
+
+        _ ->
+          {:ok,
+           job
+           |> Map.put(:state, @terminal)
+           |> Map.put(:failure, failure)
+           |> Map.put(:updated_at, now)}
+      end
+    end, opts)
+  end
+
   defp transition_to_terminal(job_id, node_id, attrs, opts) do
     adapter = Keyword.get(opts, :adapter, Scheduler.JobStore.InMemoryAdapter)
     now = now_ms()

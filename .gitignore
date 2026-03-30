@@ -9,3 +9,7 @@ rust/jailer/target/
 
 # Local env
 .env
+
+# Sensitive key material
+*.pem
+infra/ec2/keys/

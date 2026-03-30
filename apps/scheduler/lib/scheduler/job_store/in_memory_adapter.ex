@@ -46,6 +46,15 @@ defmodule Scheduler.JobStore.InMemoryAdapter do
   end
 
   @impl true
+  def list_jobs(opts \\ []) do
+    agent = Keyword.get(opts, :name, __MODULE__)
+
+    Agent.get(agent, fn state ->
+      Map.values(state.jobs)
+    end)
+  end
+
+  @impl true
   def mutate_job(job_id, mutator, opts \\ []) do
     agent = Keyword.get(opts, :name, __MODULE__)
 
