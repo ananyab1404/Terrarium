@@ -1,110 +1,137 @@
-# [Project Name] 🚀
+# Infinity Node
 
-[![Elixir Version](https://img.shields.io/badge/Elixir-1.14+-4B275F?style=for-the-badge&logo=elixir)](https://elixir-lang.org/)
+[![Elixir Version](https://img.shields.io/badge/Elixir-1.16+-4B275F?style=for-the-badge&logo=elixir)](https://elixir-lang.org/)
 [![AWS SQS](https://img.shields.io/badge/AWS_SQS-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white)](https://aws.amazon.com/sqs/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/[username]/[repo]/ci.yml?style=for-the-badge)](https://github.com/[username]/[repo]/actions)
 
-> A highly resilient, serverless execution engine leveraging Elixir/OTP, Firecracker microVMs, and AWS SQS for fault-tolerant workload distribution.
+A resilient serverless execution engine built with Elixir/OTP scheduling and Firecracker microVM isolation.
 
-[Project Name] is designed to handle massive concurrency with structural recovery rather than defensive programming. By combining the legendary fault tolerance of the BEAM VM with the strict hardware-level isolation of Firecracker, this system executes untrusted code safely, reliably, and at scale.
+Infinity Node is designed to run untrusted workloads safely at scale. Scheduling, retries, and crash recovery are handled by OTP supervision trees, while each execution happens in a microVM boundary.
 
-## 📑 Table of Contents
-- [Architecture Philosophy](#-architecture-philosophy)
-- [Key Features](#-key-features)
-- [System Architecture](#-system-architecture)
-- [Prerequisites](#-prerequisites)
-- [Getting Started](#-getting-started)
-- [Testing & Scalability](#-testing--scalability)
-- [Observability](#-observability)
-- [Contributing](#-contributing)
-- [License](#-license)
+## Table of Contents
+- [Architecture Philosophy](#architecture-philosophy)
+- [Key Features](#key-features)
+- [System Architecture](#system-architecture)
+- [Repository Layout](#repository-layout)
+- [Prerequisites](#prerequisites)
+- [Getting Started](#getting-started)
+- [Validation on Metal](#validation-on-metal)
+- [Contributing](#contributing)
+- [License](#license)
 
----
+## Architecture Philosophy
 
-## 🧠 Architecture Philosophy
+At the core of Infinity Node is the Elixir BEAM process model. Serverless scheduling is treated as a distributed concurrency problem, and failures are recovered structurally through supervisors instead of ad hoc recovery logic.
 
-At the core of [Project Name] is the **Elixir BEAM VM process model**. We treat serverless scheduling fundamentally as a concurrency problem. By utilizing OTP's actor model, every job is treated as an isolated process. Every failure is contained, ensuring that recovery is structural and automatic.
+## Key Features
 
----
+- Strict execution isolation with Firecracker microVMs.
+- Snapshot-based execution model to reduce cold start overhead.
+- OTP-native worker orchestration and restart semantics.
+- S3-backed log capture for stdout and stderr artifacts.
+- Security controls through cgroups, private network namespaces, and seccomp modes.
 
-## ✨ Key Features
+## System Architecture
 
-* **Strict Execution Isolation:** Powered by Firecracker microVMs. Guests do not share a kernel. Each execution runs in a KVM-backed VM restored from a snapshot, complete with a private network namespace and a seccomp-BPF syscall whitelist.
-* **Zero-Contention Scheduling:** AWS SQS absorbs burst traffic and provides durable backpressure at the ingestion boundary. Internally, a consistent-hash coordinator routes jobs via direct OTP message passing.
-* **Auto-Scaling:** A dedicated autoscaler daemon monitors queue depth, triggering ECS scale-out events before backpressure becomes a bottleneck.
-* **Bulletproof Fault Tolerance:** Handled seamlessly by OTP supervision trees. Dead workers restart in isolation, partitioned jobs are reclaimed upon lease expiry, and repeatedly failed jobs are gracefully routed to a DynamoDB Dead-Letter Table (DLQ).
-
----
-
-## 🏗 System Architecture
-
-1. **Ingress:** Jobs arrive and are durably queued in AWS SQS.
-2. **Coordination:** The OTP coordinator fetches batches and distributes them to available workers.
-3. **Execution:** Workers spin up a fresh Firecracker microVM, inject the artifact via `vsock`, capture `stdout`, and completely wipe the VM upon completion.
-4. **Egress:** Results are returned, or in the case of exhausted retries, structured failure reasons are logged to DynamoDB.
-
----
-
-## 🛠 Prerequisites
-
-Before running this project locally or deploying to production, ensure you have the following installed:
-
-* [Elixir](https://elixir-lang.org/install.html) (v1.14 or higher)
-* [Erlang/OTP](https://www.erlang.org/downloads) (v25 or higher)
-* [Firecracker](https://github.com/firecracker-microvm/firecracker) (v1.3+)
-* AWS CLI configured with appropriate permissions for SQS, ECS, and DynamoDB.
-
----
-
-## 🚀 Getting Started
-
-**1. Clone the repository**
-```bash
-git clone [https://github.com/](https://github.com/)[username]/[repo].git
-cd [repo]
-
-```
-## Architecture
-```
-
+1. Ingress: jobs are accepted and queued.
+2. Coordination: scheduler components select an available worker slot.
+3. Execution: worker restores runtime state, injects artifact and payload, executes, and collects output.
+4. Egress: result envelope and log pointers are returned to the caller.
 
 ```mermaid
 graph TB
+    A[Developer] -->|POST /invoke| B[Phoenix API Layer]
 
-A[Developer] -->|POST /invoke| B[Phoenix API Layer]
+    B -->|Validate Request| C[DynamoDB - Jobs Table]
+    B -->|Enqueue Job| D[SQS Queue]
 
-B -->|Validate Request| C[DynamoDB - Jobs Table]
-B -->|Enqueue Job| D[SQS Queue]
+    D --> E[SQSConsumer GenServer]
+    E --> F[DispatchCoordinator]
 
-D --> E[SQSConsumer GenServer]
-E --> F[DispatchCoordinator]
+    F -->|Select Least Loaded Node| G[Worker Node]
 
-F -->|Select Least Loaded Node| G[Worker Node]
+    subgraph Worker_Node
+        G --> H[WorkerPoolSupervisor]
+        H --> I1[WorkerProcess Slot 1]
+        H --> I2[WorkerProcess Slot 2]
+        H --> I3[WorkerProcess Slot N]
+    end
 
-subgraph Worker_Node
-    G --> H[WorkerPoolSupervisor]
-    H --> I1[WorkerProcess Slot 1]
-    H --> I2[WorkerProcess Slot 2]
-    H --> I3[WorkerProcess Slot N]
-end
+    I1 -->|Restore Snapshot| J[Firecracker MicroVM]
+    I2 -->|Restore Snapshot| J
+    I3 -->|Restore Snapshot| J
 
-I1 -->|Restore Snapshot| J[Firecracker MicroVM]
-I2 -->|Restore Snapshot| J
-I3 -->|Restore Snapshot| J
+    J -->|Receive Artifact + Payload via Vsock| K[Execute Function]
+    K --> L[Stdout / Stderr / Exit Code]
 
-J -->|Receive Artifact + Payload via Vsock| K[Execute Function]
+    L --> M[WorkerProcess Post-Execution]
+    M -->|Upload Logs| N[S3 Logs Bucket]
+    M -->|Emit Metrics| O[OpenTelemetry]
+    M -->|Reset VM Snapshot| P[VM Ready State]
+    M -->|Update State| C
 
-K --> L[Stdout / Stderr / Exit Code]
-
-L --> M[WorkerProcess Post-Execution]
-
-M -->|Upload Logs| N[S3 Logs Bucket]
-M -->|Emit Metrics| O[OpenTelemetry]
-M -->|Reset VM Snapshot| P[VM Ready State]
-
-M -->|Update State| C
-
-C -->|State TERMINAL| Q[Phoenix API]
-Q --> R[Return Result to Developer]
+    C -->|State TERMINAL| Q[Phoenix API]
+    Q --> R[Return Result to Developer]
 ```
+
+## Repository Layout
+
+```text
+apps/
+    api/
+    scheduler/
+    worker/
+rust/
+    jailer/
+scripts/
+config/
+```
+
+## Prerequisites
+
+- Elixir 1.16+
+- Erlang/OTP 26+
+- Rust toolchain
+- Firecracker and KVM-capable Linux host for runtime validation
+- AWS credentials with access to required buckets and queue infrastructure
+
+## Getting Started
+
+1. Clone and switch to development branch.
+
+```bash
+git clone https://github.com/Krishang-Zinzuwadia/diva-lopers.git
+cd diva-lopers
+git checkout dev
+```
+
+2. Install dependencies and run tests.
+
+```bash
+mix deps.get
+mix test apps/worker/test
+```
+
+3. For Linux metal-host bootstrap and validation, use scripts in `scripts/`.
+
+## Validation on Metal
+
+Run these on Ubuntu bare-metal EC2 (i3.metal or c5.metal):
+
+```bash
+./scripts/bootstrap_ubuntu_worker.sh
+./scripts/create_snapshot.sh
+./scripts/validate_isolation.sh
+./scripts/run_snapshot_fidelity.sh
+./scripts/phase5_validate.sh
+```
+
+## Contributing
+
+1. Create changes on `dev`.
+2. Keep commits atomic and use conventional prefixes such as `feat`, `fix`, and `chore`.
+3. Run relevant tests before pushing.
+
+## License
+
+MIT
