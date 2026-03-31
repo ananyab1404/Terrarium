@@ -8,10 +8,20 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Invoke-Aws {
+    param([Parameter(Mandatory = $true)][string[]]$Args)
+
+    & aws @Args
+    if ($LASTEXITCODE -ne 0) {
+        throw "AWS CLI command failed: aws $($Args -join ' ')"
+    }
+}
+
 function New-TempJsonFile {
     param([Parameter(Mandatory = $true)][string]$Content)
     $temp = [System.IO.Path]::GetTempFileName() + ".json"
-    Set-Content -Path $temp -Value $Content -Encoding UTF8
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($temp, $Content, $utf8NoBom)
     return $temp
 }
 
@@ -150,18 +160,18 @@ $files = @(
 )
 
 try {
-    aws dynamodb create-table --region $Region --cli-input-json ("file://" + $files[0])
-    aws dynamodb create-table --region $Region --cli-input-json ("file://" + $files[1])
-    aws dynamodb create-table --region $Region --cli-input-json ("file://" + $files[2])
+    Invoke-Aws -Args @("dynamodb", "create-table", "--region", $Region, "--cli-input-json", ("file://" + $files[0]))
+    Invoke-Aws -Args @("dynamodb", "create-table", "--region", $Region, "--cli-input-json", ("file://" + $files[1]))
+    Invoke-Aws -Args @("dynamodb", "create-table", "--region", $Region, "--cli-input-json", ("file://" + $files[2]))
 
-    aws dynamodb update-time-to-live --region $Region --table-name $idempotencyTable --time-to-live-specification Enabled=true, AttributeName=expires_at
-    aws dynamodb update-time-to-live --region $Region --table-name $jobsTable --time-to-live-specification Enabled=true, AttributeName=ttl_archive_at
-    aws dynamodb update-time-to-live --region $Region --table-name $deadletterTable --time-to-live-specification Enabled=true, AttributeName=ttl_archive_at
+    Invoke-Aws -Args @("dynamodb", "update-time-to-live", "--region", $Region, "--table-name", $idempotencyTable, "--time-to-live-specification", "Enabled=true,AttributeName=expires_at")
+    Invoke-Aws -Args @("dynamodb", "update-time-to-live", "--region", $Region, "--table-name", $jobsTable, "--time-to-live-specification", "Enabled=true,AttributeName=ttl_archive_at")
+    Invoke-Aws -Args @("dynamodb", "update-time-to-live", "--region", $Region, "--table-name", $deadletterTable, "--time-to-live-specification", "Enabled=true,AttributeName=ttl_archive_at")
 
     Write-Host "Tables created. Waiting for ACTIVE state..." -ForegroundColor Cyan
-    aws dynamodb wait table-exists --region $Region --table-name $jobsTable
-    aws dynamodb wait table-exists --region $Region --table-name $idempotencyTable
-    aws dynamodb wait table-exists --region $Region --table-name $deadletterTable
+    Invoke-Aws -Args @("dynamodb", "wait", "table-exists", "--region", $Region, "--table-name", $jobsTable)
+    Invoke-Aws -Args @("dynamodb", "wait", "table-exists", "--region", $Region, "--table-name", $idempotencyTable)
+    Invoke-Aws -Args @("dynamodb", "wait", "table-exists", "--region", $Region, "--table-name", $deadletterTable)
 
     Write-Host "Done: $jobsTable, $idempotencyTable, $deadletterTable" -ForegroundColor Green
 }
