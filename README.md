@@ -1,4 +1,5 @@
-# Infinity Node
+# Terrarium
+
 
 [![Elixir Version](https://img.shields.io/badge/Elixir-1.16+-4B275F?style=for-the-badge&logo=elixir)](https://elixir-lang.org/)
 [![AWS SQS](https://img.shields.io/badge/AWS_SQS-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white)](https://aws.amazon.com/sqs/)
