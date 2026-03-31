@@ -7,7 +7,7 @@
 
 A resilient serverless execution engine built with Elixir/OTP scheduling and Firecracker microVM isolation.
 
-Infinity Node is designed to run untrusted workloads safely at scale. Scheduling, retries, and crash recovery are handled by OTP supervision trees, while each execution happens in a microVM boundary.
+Terrarium is designed to run untrusted workloads safely at scale. Scheduling, retries, and crash recovery are handled by OTP supervision trees, while each execution happens in a microVM boundary.
 
 ## Table of Contents
 - [Architecture Philosophy](#architecture-philosophy)
@@ -22,7 +22,7 @@ Infinity Node is designed to run untrusted workloads safely at scale. Scheduling
 
 ## Architecture Philosophy
 
-At the core of Infinity Node is the Elixir BEAM process model. Serverless scheduling is treated as a distributed concurrency problem, and failures are recovered structurally through supervisors instead of ad hoc recovery logic.
+At the core of Terrarium is the Elixir BEAM process model. Serverless scheduling is treated as a distributed concurrency problem, and failures are recovered structurally through supervisors instead of ad hoc recovery logic.
 
 ## Key Features
 
